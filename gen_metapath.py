@@ -83,6 +83,7 @@ def classify(node, pre, edge, classifier, tokenizer, id_label):
 def run_model(args):
     pairs = []
     classifier = torch.load(args.classifier)
+    classifier.eval()
     tokenizer_class = GPT2Tokenizer.from_pretrained('gpt2')
     if tokenizer_class.pad_token is None:
         tokenizer_class.add_special_tokens({'pad_token': '[PAD]'})
