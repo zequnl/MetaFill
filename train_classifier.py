@@ -95,6 +95,7 @@ def train(model, train_data, val_data, learning_rate, epochs, edge_text=None, la
         total_loss_train = 0
         total_len = 0
         pbar = tqdm(train_dataloader)
+        model.train()
         
         for train_input_h, train_input_t, train_label_h, train_label_t, train_context in pbar:
             train_label_h = train_label_h.to(device)
@@ -123,8 +124,9 @@ def train(model, train_data, val_data, learning_rate, epochs, edge_text=None, la
         total_loss_val = 0
         total_len_val = 0
         pbar = tqdm(val_dataloader)
+        model.eval()
         with torch.no_grad():
-            for val_input_h, val_input_t, val_label_h, val_label_t, val_context in tqdm(pbar):
+            for val_input_h, val_input_t, val_label_h, val_label_t, val_context in pbar:
                 val_label_h = val_label_h.to(device)
                 val_label_t = val_label_t.to(device)
                 mask_h = val_input_h['attention_mask'].to(device)
