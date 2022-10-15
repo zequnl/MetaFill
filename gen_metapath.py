@@ -101,6 +101,8 @@ def run_model(args):
         id_label = json.load(f)
     with open(args.train_file, "r") as f:
         lines = f.read().splitlines()
+    with open(args.graph_file, "r") as f:
+        edges = set(f.read().splitlines())
     print(len(lines))
     for l in lines:
         pairs.append(l.split("\t"))
@@ -117,65 +119,79 @@ def run_model(args):
     model = GPT2LMHeadModel.from_pretrained(args.model_dir)
     model.eval()
     _ = model.to(device)
-    for k in range(1, args.hop):
+    for k in range(0, args.hop):
         paths = []
-        #print(k)
-        for p in pairs:
-            for j in range(args.n_sample):
-                #print(p[0])
-                start = p[0].split(" : ")[1]
-                end = p[1].split(" : ")[1]
-                #print(start,end)
-                path = []
-                context = start + " relates to" + " _. It relates to" * k + " " + end + ". "
-                if p[1] not in node_in:
-                    break
-                end_edge_type = random.sample(node_in[p[1]], 1)[0]
-                edge = edge_text[end_edge_type]
-                # replace the last relates to
-                context = context[::-1].replace("relates to"[::-1], edge[::-1], 1)[::-1]
-                context_ids = ilm.tokenize_util.encode(context, tokenizer)
-                _blank_id = ilm.tokenize_util.encode(' _', tokenizer)[0]
-                pre = p[0]
-                flag = True
-                for i in range(k):
-                    if i == 0:
-                        if pre not in node_out:
-                            flag = False
-                            break
-                        edge_type = random.sample(node_out[pre], 1)[0]
-                    else:
-                        pre_t = pre.split(" : ")[0]
-                        if pre_t not in type_out:
-                            flag = False
-                            break
-                        edge_type = random.sample(type_out[pre_t], 1)[0]
-                    edge = edge_text[edge_type] 
-                    context = context.replace("relates to", edge, 1)
-                    position = context.find(" _")
-                    pre_len = position
-                    post_len = len(context) - position - 2
+        if k == 0:
+            for p in pairs:
+                for j in range(args.n_sample):
+                    start = p[0].split(" : ")[1]
+                    end = p[1].split(" : ")[1]
+                    if p[1] not in node_in:
+                        break
+                    end_edge_type = random.sample(node_in[p[1]], 1)[0]
+                    if end_edge_type == args.edge_type:
+                        continue
+                    if p[0] + "\t" + end_edge_type + "\t" + p[1] in edges:
+                        logger.info(start+ "->" + end_edge_type + "->" + end)
+                        paths.append([p[0]+ "->" + end_edge_type + "->" + p[1]])
+        else:
+            for p in pairs:
+                for j in range(args.n_sample):
+                    #print(p[0])
+                    start = p[0].split(" : ")[1]
+                    end = p[1].split(" : ")[1]
+                    #print(start,end)
+                    path = []
+                    context = start + " relates to" + " _. It relates to" * k + " " + end + ". "
+                    if p[1] not in node_in:
+                        break
+                    end_edge_type = random.sample(node_in[p[1]], 1)[0]
+                    edge = edge_text[end_edge_type]
+                    # replace the last relates to
+                    context = context[::-1].replace("relates to"[::-1], edge[::-1], 1)[::-1]
                     context_ids = ilm.tokenize_util.encode(context, tokenizer)
-                    context_ids[context_ids.index(_blank_id)] = additional_tokens_to_ids['<|infill_word|>']
-                    logger.info(ilm.tokenize_util.decode(context_ids, tokenizer))
-                    generated = infill_with_ilm(model, additional_tokens_to_ids, context_ids, num_infills=1)[0]
-                    s = ilm.tokenize_util.decode(generated, tokenizer).replace("\n", " ")
-                    logger.info(s)
-                    node = s[pre_len: -post_len].strip()
-                    if node == "":
-                        flag = False
-                        break
-                    t = classify(node, pre, edge, classifier, tokenizer_class, id_label)
-                    if t == "none":
-                        flag = False
-                        break
-                    path.append(pre + "->" + edge_type + "->" + t + " : " + node)
-                    pre = t + " : " + node
-                    context = s
-                if flag:
-                    path.append(pre + "->" + end_edge_type + "->" + p[1])
-                    if len(path) == k + 1:
-                        paths.append(path)
+                    _blank_id = ilm.tokenize_util.encode(' _', tokenizer)[0]
+                    pre = p[0]
+                    flag = True
+                    for i in range(k):
+                        if i == 0:
+                            if pre not in node_out:
+                                flag = False
+                                break
+                            edge_type = random.sample(node_out[pre], 1)[0]
+                        else:
+                            pre_t = pre.split(" : ")[0]
+                            if pre_t not in type_out:
+                                flag = False
+                                break
+                            edge_type = random.sample(type_out[pre_t], 1)[0]
+                        edge = edge_text[edge_type] 
+                        context = context.replace("relates to", edge, 1)
+                        position = context.find(" _")
+                        pre_len = position
+                        post_len = len(context) - position - 2
+                        context_ids = ilm.tokenize_util.encode(context, tokenizer)
+                        context_ids[context_ids.index(_blank_id)] = additional_tokens_to_ids['<|infill_word|>']
+                        logger.info(ilm.tokenize_util.decode(context_ids, tokenizer))
+                        generated = infill_with_ilm(model, additional_tokens_to_ids, context_ids, num_infills=1)[0]
+                        s = ilm.tokenize_util.decode(generated, tokenizer).replace("\n", " ")
+                        logger.info(s)
+                        node = s[pre_len: -post_len].strip()
+                        if node == "":
+                            flag = False
+                            break
+                        t = classify(node, pre, edge, classifier, tokenizer_class, id_label)
+                        if t == "none":
+                            flag = False
+                            break
+                        logger.info(t)
+                        path.append(pre + "->" + edge_type + "->" + t + " : " + node)
+                        pre = t + " : " + node
+                        context = s
+                    if flag:
+                        path.append(pre + "->" + end_edge_type + "->" + p[1])
+                        if len(path) == k + 1:
+                            paths.append(path)
             
         with open(args.output_prefix + str(k + 1) + ".txt", "w") as f:
             for p in paths:
@@ -186,6 +202,7 @@ def run_model(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--train-file', type=str, default=None, help='txt file with node pairs in training set')
+    parser.add_argument('--graph-file', type=str, default=None, help='txt file with all edges')
     parser.add_argument('--hop', type=int, default=5, help='number of hops from start to end')
     parser.add_argument('--model-dir', type=str, default='abs_ilm',
                         help='where the pretrained model stores')
@@ -201,6 +218,7 @@ if __name__ == '__main__':
     parser.add_argument('--classifier', type=str, default=None, help='context-aware node type classifier')
     parser.add_argument('--id-label', type=str, default=None, help='node types')
     parser.add_argument("--from-pretrained", action="store_true", help='whether to use our finetuned gpt')
+    parser.add_argument('--edge-type', type=str, default=None, help='edge type')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     if args.from_pretrained:
