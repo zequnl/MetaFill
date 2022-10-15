@@ -39,8 +39,6 @@ Generate the masked data for finetuning GPT-2 for text infilling:
 
 **Remove the "--from-pretrained"** in ```gen_metapath.sh``` and run it. 
 
-Since we do not need to infill any node names for 1-hop meta-paths, we calculate the scores of 1-hop meta-paths when processing the data. ```meta_path_nell_1.txt``` and ```meta_path_heterographine_1.txt``` are the score files. (The scores are calculated by sampling edges connecting training node pairs for 10 times, which is consistent with args.n\_sample, please re-sample the edges if you change args.n\_sample.)
-
 ## Acknowledgement
 
 We use the open-source code of "Enabling language models to fill in the blanks"[<sup>1</sup>](#ilm) to finetune the GPT-2 for text infilling
